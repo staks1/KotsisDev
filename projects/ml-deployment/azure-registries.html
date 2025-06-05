@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>(Azure) Container Registries</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <style>
+    body {
+      background-color: #000;
+      color: white;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .navbar-custom {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 10;
+      background: #000;
+      padding: 1rem 2rem;
+    }
+
+    .nav-link, .github-icon {
+      color: white !important;
+      font-weight: 500;
+      margin-right: 1.5rem;
+      text-decoration: none !important;
+    }
+
+    .nav-link:hover, .github-icon:hover {
+      opacity: 0.8;
+    }
+
+    .content {
+      max-width: 800px;
+      margin: 130px auto 60px;
+      padding: 0 20px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      margin-bottom: 1.2rem;
+      color: #0dcaf0;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      margin-top: 2rem;
+      margin-bottom: 1rem;
+      color: #0dcaf0;
+    }
+
+    p {
+      line-height: 1.6;
+      font-size: 1.05rem;
+    }
+
+    pre {
+      background-color: #111;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin-top: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* code {
+      font-family: 'Courier New', monospace;
+      color: #0dcaf0;
+      font-size: 0.95rem;
+    } */
+  </style>
+</head>
+<body>
+  <div class="navbar-custom d-flex justify-content-between align-items-center">
+    <div class="d-flex gap-4 align-items-center">
+      <a href="../../about.html" class="nav-link">About</a>
+      <a href="../../data-science.html" class="nav-link">Data Science</a>
+      <a href="../../ml-deployment.html" class="nav-link">ML Deployment & App Development</a>
+    </div>
+    <div>
+      <a href="https://github.com/staks1?tab=repositories" target="_blank" class="github-icon">
+        <i class="fab fa-github fa-lg"></i>
+      </a>
+    </div>
+  </div>
+
+  <div class="content">
+    <h1>(Azure) Container Registries
+    </h1>
+    <h2>[Building the image]</h2>
+
+    <p>
+      After we have our Dockerfile, with the instructions on how 
+      to copy the relevant code, expose ports, create variables, 
+      environment variables, run commands on 
+      the intermediate containers, and define the final 
+      Entrypoint, functioning as the main command the container will run
+      when we call <mark>docker container run </mark>
+    <p>Now we can build our image
+    using the command <mark>docker image build</mark>
+    and also specify the build context, which denotes the 
+    files that will be sent to the docker daemon to construct the image.
+    It is important to note that you should add a <mark>.dockerignore</mark>
+    file listing all the irrelevant files you don't want to include in the 
+    build context since this is important not only in order to have small 
+    sized images but also to avoid leaking confidential data.
+    So you can run the command like this :
+    <pre><code>
+    docker image build -t image_name -f dockerfile_name path_to_build_context
+    </code>
+    </pre>
+    <p>
+    The important bits here are that you can select what files the daemon
+    will take into account by defining a path with <mark>path_to_build_context</mark>
+    and add files that you want to exlude inside the .dockerignore file.
+    </p>
+    <p>
+    Additionally the image_name can include <mark>name:tag</mark> 
+    and that means we define not only the image name but the tag also (version)
+    In production environments this is important since we may define tags 
+    based on github commits so when we automate image building using a particular
+    version can be important.  
+    If you only specify a name without ":" then this will be used for image name 
+    and tag will be defaulted to "latest" so bear that in mind.
+    </p>
+    <p>
+    Then we got the dockerfile_name which should include the path to it 
+    and the name if for example it does not exist in the current directory 
+    or it is not named Dockerfile.
+    </p>
+    If everything is working ok you will see the size of the files of the final
+    image and the instructions you have specified 
+    in the Dockerfile also running while the image is building and 
+    also you will see the final size of the image.
+    When building is completed you can run
+    <pre><code>
+    docker image ls -a | grep image_name
+        </code>
+    </pre>
+    to get a certain image you have built .
+
+    <h2> [Registries]</h2>
+    Now that we have our image <mark>image_name</mark> ready 
+    we need to explain a bit about the process further. 
+    Ok, if you haven't heard anything about Docker registry take 
+    a look at the following link which explains the concept 
+    <a href = "https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-registry/">[link]</a>
+    TLDR when we have an image we can push it to a remote or local 
+    centralized location from where other people can download them and 
+    use them. Docker also offers you the option to create and run 
+    your own registry as a container or another process so that 
+    you can push your images locally/remotely in private registries.
+    The most famous Docker Registry is the Docker Hub 
+    where we can find all available images that people all around the 
+    world have built and share with other people, whether that means 
+    base images to use only as the base layer of an application 
+    or custom made application that excel at certain tasks 
+    or are built to quickly test something out. 
+    <a href = "https://hub.docker.com/">[link]</a>
+    Azure offers the option to create your own 
+    registries called container registries, which i really don't 
+    understand since they are image registries, but maybe i am missing 
+    something. But before we create our own container registry 
+    we need to talk a bit about the azure client.
+
+    <h2>[Azure Client]</h2>
+    So Azure offers the option to download a tool that allows you 
+    to handle your cloud computing services through a terminal based 
+    API in the form of certain commands, instead of browsing through the U.I. 
+    website, which is sometimes pretty much CHAOS.
+    You can download the azure client in your distro if you have 
+    Linux or Windows or Mac. <a href="https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-linux?view=azure-cli-latest&pivots=apt">[Link]</a>
+    
+    <h2>[Logging in to Azure]</h2>
+    If you have a valid azure account and you have not left an LLM 
+    running for 2 years and forgot to pay the bills, you will probably have access to your app services, 
+    containers and other tools through the U.I. so you can validate this first .
+    Then run 
+    <pre><code>
+    az login --tenant ${tenant_id} 
+        </code></pre>
+    where tenat_id the id of your tenant , here defined as a shell variable
+    assuming you have defined it earlier, or just copy the tenant_id there.
+    (You usualy see the tenant-id on the top right of the screen)
+    in the Azure website.
+    If you have multifactor authentication you can 
+    add <code>--use-device-code</code>
+    to generate a url and validate access through a sent code.
+    You can do multiple things in the azure cli 
+    <a href="https://learn.microsoft.com/en-us/cli/azure/?view=azure-cli-latest">[Link]</a>
+    
+    <h2>[Creating container registry</h2>
+    Assuming you are logged in.
+    <pre><code>
+    az acr create 
+    --name registry_name \
+    --resource-group myResourceGroup \
+    --sku Basic \
+    --location westeurope 
+    --admin-enabled true
+</code></pre>
+    Here we create a container registry named "registry_name"
+    with resource_group name "myResourceGroup", assuming you have 
+    created such a resource group using the Basic plan.
+    This is important since it defines the maximum space for images 
+    on the registry and it is tied to a certain cost plan 
+    so take a look at this to clear things out 
+    <a href="https://azure.microsoft.com/en-us/pricing/details/container-registry/">[Link]</a>
+    Then we define the location based on proximity of operations 
+    and admin-enabled True so we can login to the registry fast.
+    Running then <code>az acr credential show --name registry_name.azurecr.io</code>
+    we will get the credentials we can use to log in to the registry.
+
+    <h2>[Tagging image]</h2>
+    Since we have built our image we just need to tag it with the 
+    container registry name. The whole namespace of your registry 
+    is <code>registry_name.azurecr.io</code> like we used above since 
+    <code>azurecr.io</code> is the domain of the Azure Container registries.
+    So in essence the whole name functions as an endpoint where we send the images.
+    It is not necessary to tag it with azure client, we can just use docker 
+    and only define the registry where we want to push. 
+    What we do is actually just adding <code>registry_name/image_name:tag</code>
+    to the original <code>image_name:tag</code> we have created.
+    Below we assume the tag is the default "latest" and as we said the 
+    registry name is registry_name.
+    <pre><code>
+    docker image tag image_name:latest registry_name.azurecr.io/image_name:latest
+    </code></pre>
+    and we are done!
+
+
+    <h2>[Pushing Image to Container Registry]</h2>
+    <p>
+        
+        If you also have set admin password username and key for the 
+        registry (or better use Managed Identity since admin use is discouraged for security reasons)
+        you can now login to the azure registry . 
+        This was actually really surprising for me the first time,
+        I did not expect that we need to separately login to the registry 
+        but it but well we need.
+    </p>
+        We use the following command to connect to the azure registry.
+    <pre><code>
+    docker login registry_name.azurecr.io -u username -p password
+    </code>
+    </pre>
+    To push the image we just do :
+    <pre><code>
+    docker image push registry_name.azurecr.io/image_name:latest
+    </code></pre>
+    and now Azure knows the whole path where the image must reside.
+    We can also test if everything is working fine by pulling the image 
+    and running the container locally by running  
+    <code>docker image pull registry_name.azurecr.io/image_name:latest</code>
+    
+    Then if we run the <code>docker image ls -a</code> command again 
+    we will hopefully see our image there !
+    We can run the container from the image locally with 
+    <code>docker container run --name container_name image_name</code>
+    and of course specify any port mappings or commands we want to run 
+    from the container.
+
+    
+  
+   
+  </div>
+</body>
+</html>
