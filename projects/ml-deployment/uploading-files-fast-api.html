@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Developing a Document Intelligence app using FastAPI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <style>
+    body {
+      background-color: #000;
+      color: white;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .navbar-custom {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 10;
+      background: #000;
+      padding: 1rem 2rem;
+    }
+
+    .nav-link, .github-icon {
+      color: white !important;
+      font-weight: 500;
+      margin-right: 1.5rem;
+      text-decoration: none !important;
+    }
+
+    .nav-link:hover, .github-icon:hover {
+      opacity: 0.8;
+    }
+
+    .content {
+      max-width: 800px;
+      margin: 130px auto 60px;
+      padding: 0 20px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      margin-bottom: 1.2rem;
+      color: #0dcaf0;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      margin-top: 2rem;
+      margin-bottom: 1rem;
+      color: #0dcaf0;
+    }
+
+    p {
+      line-height: 1.6;
+      font-size: 1.05rem;
+    }
+
+    pre {
+      background-color: #111;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin-top: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* code {
+      font-family: 'Courier New', monospace;
+      color: #0dcaf0;
+      font-size: 0.95rem;
+    } */
+  </style>
+</head>
+<body>
+  <div class="navbar-custom d-flex justify-content-between align-items-center">
+    <div class="d-flex gap-4 align-items-center">
+      <a href="../../about.html" class="nav-link">About</a>
+      <a href="../../data-science.html" class="nav-link">Data Science</a>
+      <a href="../../ml-deployment.html" class="nav-link">ML Deployment & App Development</a>
+    </div>
+    <div>
+      <a href="https://github.com/staks1?tab=repositories" target="_blank" class="github-icon">
+        <i class="fab fa-github fa-lg"></i>
+      </a>
+    </div>
+  </div>
+
+  <div class="content">
+    <h1>Uploading files with FastAPI
+    </h1>
+
+    <p>
+      In the previous <a href = "./fast-api-app.html">[post]</a>
+      we developed a simple Document Intelligence App that 
+      takes the paths of pdf files, processes them using a Class 
+      that encapsulates our "Document Intelligence" pipeline 
+      and finally saves a final <strong>csv</strong> file 
+      with the extracted table, while also returning the serialized 
+      Document model (along with the processed pages) back to the client.
+      This is great but who would actually use such an app locally ?
+      To be able to make this an actual application we need to be 
+      able to upload files that the pipeline can then process.
+      Today we are going to use the Upload options from FastAPI.
+
+    </p>
+
+
+    <h2>[models.py]</h2>
+    <p> OK now for the hard part... But wait, there is no hard part!
+        FastAPI offers the class  <mark>File</mark> so that 
+        we can define files to be uploaded. To start with in 
+        the original documentation <a href = "https://fastapi.tiangolo.com/tutorial/request-files/">[link]</a> 
+        we are instructed to first download 
+        <mark>python-multipart</mark> so we can receive uploaded files.
+        Uploaded files are sent like form-data and to upload forms ,
+        this library is required. 
+    </p>
+    <p>The first thing to remember is we need to go the path operation function 
+        that will actually upload the file (it is a post method) and define a class 
+        <mark>File</mark> for the input we want to upload. This is required 
+        because of forgotten FastAPI will intepret the inputs as query parameters or 
+        a json body. 
+        Then we can simply type hint the input with <mark>bytes</mark>
+        and that means that FastAPI will read the file and we will receive the contents 
+        as bytes. But be careful <u>the whole contents will be stored in memory</u>.
+        This is great for small files but for our case, since we do not 
+        know how large the pdf files might be we could probably benefit from 
+        trying out other options. And one such option is to use the 
+        <mark>Upload</mark> class! This will automatically store part of the file in memory 
+        up to a certain limit and then what remains will be stored in disk,
+        which is great for larger files.
+        It also exposes certain attributes like for example 
+        <ul>
+            <li><strong>filename</strong>: the original filename </li>
+            <li><strong>content_type</strong>: string with the content type </li>
+            <li><strong>file</strong>: this is the actual file object we can use like ordinary files in python</li>
+        </ul>
+    </p>
+        <p>
+        The last point is really important. 
+        This means we can use this file object with file methods like read or write.
+        The documentation informs us about this here <a href = "https://fastapi.tiangolo.com/tutorial/request-files/#file-parameters-with-uploadfile">[Link]</a>
+        once again making life better! It says the methods we can call on the file 
+        are async so we need to await them. 
+        On the other hand if the need to read the file synchronously 
+        appears we can call the method on the <code>pdf_file.file</code>
+        and process them in sync methods, so schedule them in different threads.
+        </p>
+        <p> Using the async methods allows to combine reading the file 
+            with <code>aiofiles</code> so we can read a file in chunks
+            and asynchronously! And that's all we are going to need. 
+            Now we need to go to our class method
+            <code>parsePdf</code>
+            and just change the input from the Pydantic model we had created 
+            to <code>File(...)</code> and FastAPI will expect a file upload there.
+
+        </p>
+        <pre><code class="language-python">
+    async def parsePdf(self, pdf_input: UploadFile = File(...)) -> dict[int, str]:
+        print("parsing pdf")
+        # print(pdf_input.pdf_path)
+        extracted_text: dict[int, str] = {}
+
+        # now read the pdf file asynchronously and write it to temp location
+        # disk + ram , then we need to process it
+        # and upload it write in predefined location --> ./filename
+        try:
+            async with aiofiles.open(pdf_input.filename, "wb") as f:
+                print(f"the whole file has size {pdf_input.size}")
+                contents = await pdf_input.read(4096)
+                read_bytes = 0
+                while contents:
+                    # this should be customizable, the size
+                    await f.write(contents)
+                    read_bytes += 4096
+                    contents = await pdf_input.read(4096)
+                print(f"total bytes read {read_bytes}\n")
+        except Exception:
+            raise HTTPException(status_code=500, detail="Problem uploading file")
+        # we assume file read is done and ok now
+        reader = PdfReader(pdf_input.filename)
+        self.number_of_pages = len(reader.pages)
+        print(f"This pdf has {self.number_of_pages} pages.")
+        extracted_text = {i: x.extract_text() for i, x in enumerate(reader.pages)}
+
+        # here call the classifier
+        print("extracted text is", extracted_text)
+
+        # initialize classifier and use it
+        doc_classifier = Templateclassifier()
+        all_pdf_text = "".join(
+            [f"\npage{i}\n" + x.extract_text() for i, x in enumerate(reader.pages)]
+        )
+        category = doc_classifier.doc_classify(all_pdf_text)
+        print("category is", category)
+
+        return extracted_text
+    </code> </pre>
+    <p>
+    As you can see here we asynchronously read the file 
+    in chunks of <code>4096</code> bytes using the <code>read</code>
+    method on the original input file and write it temporarily. This is done in the 
+    method that is used as the starting point of our pipeline. 
+    If your use case is to only read the file then awaiting for 
+    file read should be enough. Also it is great that other requests 
+    can also be run to the server while reading is happening.
+    Of course we could potentially use a separate path operation 
+    function, upload the file, save it and then call our pipeline
+    based on some certain <strong>file name</strong> or 
+    <strong>file id</strong>. 
+    This pipeline here assumes fast direct processing of the latest uploaded file
+    meaning we are in a hurry to extract those tables!
+    The line <code>contents = await pdf_input.read(4096)</code> 
+    uses 4096 bytes to read each time and write it to a file, but this can be customized. 
+    A simple method could be created to check size of the file 
+    and decide what size of chunk we are going to read in memory at one time.
+    Also note here because i use the <mark>PdfReader</mark> i save the 
+    file temporarily to process it easily by path.
+    </p>
+    <p>
+    And the final cherry on top is that we don't really need to do 
+    anything else in our Class besides changing the call_pdf_pipeline function 
+    so that it now takes as input the same type that <code>parsePdf</code>
+    expects and FastAPI will validate the whole pipeline correctly.
+    Now this is awesome!
+</p>
+    <pre><code class = 'language-python'>
+    async def call_pdf_pipeline(self, pdf_input: UploadFile) -> PDFmodeloutput:
+        ...
+    </code>
+</pre>
+<h2>[Testing the method]</h2>
+Visiting the endpoint and uploading a file we can see 
+that when we click execute button 
+<br>
+<br>
+<img src="../../images/ml-deployment/document-intelligence/fast_api_uploading_file.png">
+<br>
+<br>  
+<img src="../../images/ml-deployment/document-intelligence/after_upload_execute.png">
+<br>
+<br>
+And there it is! We get the same response as before. Our pdf processed 
+and the csv saved.
+  </div>
+</body>
+</html>
