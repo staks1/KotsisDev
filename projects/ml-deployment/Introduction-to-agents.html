@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Designing a Simple Conversational Agent</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <style>
+    body {
+      background-color: #000;
+      color: white;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .navbar-custom {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 10;
+      background: #000;
+      padding: 1rem 2rem;
+    }
+
+    .nav-link, .github-icon {
+      color: white !important;
+      font-weight: 500;
+      margin-right: 1.5rem;
+      text-decoration: none !important;
+    }
+
+    .nav-link:hover, .github-icon:hover {
+      opacity: 0.8;
+    }
+
+    .content {
+      max-width: 800px;
+      margin: 130px auto 60px;
+      padding: 0 20px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      margin-bottom: 1.2rem;
+      color: #0dcaf0;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      margin-top: 2rem;
+      margin-bottom: 1rem;
+      color: #0dcaf0;
+    }
+
+    p {
+      line-height: 1.6;
+      font-size: 1.05rem;
+    }
+
+    pre {
+      background-color: #111;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin-top: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* code {
+      font-family: 'Courier New', monospace;
+      color: #0dcaf0;
+      font-size: 0.95rem;
+    } */
+  </style>
+</head>
+<body>
+  <div class="navbar-custom d-flex justify-content-between align-items-center">
+    <div class="d-flex gap-4 align-items-center">
+      <a href="../../about.html" class="nav-link">About</a>
+      <a href="../../data-science.html" class="nav-link">Data Science</a>
+      <a href="../../ml-deployment.html" class="nav-link">ML Deployment & App Development</a>
+    </div>
+    <div>
+      <a href="https://github.com/staks1?tab=repositories" target="_blank" class="github-icon">
+        <i class="fab fa-github fa-lg"></i>
+      </a>
+    </div>
+  </div>
+
+  <div class="content">
+    <h1>Designing a simple Conversational Agent
+    </h1>
+
+    <p>
+      Ready for agents ? Well tbh i don't really like buzzwords that much.
+      Today though we are going to talk about one. Actually let's implement one.
+      Luckily <a href = "https://langchain-ai.github.io/langgraph/concepts/why-langgraph/">[LangGraph]</a>
+      offers an extended API so we can create our own conversational agents.
+    </p>
+
+    <h2>[Designing the Logic]</h2>
+    <p>For our simple conversational agent let's create one user node and one a.i. node 
+        denoting the possible nodes that take actions. The logic is as follows :
+        <ol>
+        <li>A start node feeds a system prompt to the model to give the appropriate context</li>
+        <li>The human starts the conversation</li>
+        <li>A conditional node sends the flow to the end_node or to the LLM model to continue the conversation.</li>
+        <li>If a specific <code>[end]|[stop]</code> phrase is received from the human user then the conversation ends.</li>
+    </ol>
+    </p>
+     <br>
+     <img src="../../images/ml-deployment/agents/langgraph_graph.png">
+    
+    
+
+<h2>[Selecting LLM and preprocessing steps]</h2>
+<p>
+Since we are not rich we are going to use open source models for the <code>chat_model</code>
+construct that Langgraph offers. These <code>chat_models</code> play the role of the LLM models 
+we can invoke with certain messages and then model inference begins and we get the results back from the model.
+Langgraph offers many methods, like for example batching or streaming.
+
+In our case we are going to use <code>TinyLlama/TinyLlama-1.1B-Chat-v1.0</code>
+which is an extremely lightweight model with 1.1 billion parameters so it can be experimented with easily.
+
+We need to first use the huggingface api to load the model and Tokenizer.<br>
+We are going to use the <code>HuggingFacePipeline</code>fuction to generate text with TinyLlama.
+Those steps steps are simple , we just select low temperature and "text-generation"
+</p>
+<pre><code class="language-python">
+    from langchain.llms import HuggingFacePipeline
+    from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
+    from typing import Annotated
+    from pydantic import BaseModel
+    from langgraph.graph import StateGraph, START, END
+    from langchain_core.messages import AnyMessage, AIMessage, HumanMessage
+    from langgraph.graph.message import add_messages
+    from typing import Literal
+    import os
+    from dotenv import load_dotenv
+    from langchain_core.messages import SystemMessage
+    from IPython.display import Image, display
+    
+    # load the environment variables
+    load_dotenv()
+    
+    
+    # download model from hugging face
+    model_id = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    # Load locally
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_id, token=os.environ["HUGGINGFACEHUB_API_TOKEN"], device_map="cpu"
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, token=os.environ["HUGGINGFACEHUB_API_TOKEN"], device_map="cpu"
+    )
+    
+    
+    pipe = pipeline(
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=256,
+        temperature=0.2,
+        do_sample=True,
+        top_p=0.98,
+        return_full_text=False,  # disable to only return the latest response not the full conversation
+    )
+    </code></pre>
+
+    <h2>[Defining the STATE model]</h2>
+        <p>
+        Langgraph works by defing a graph like the own you saw above which expects a <code>State</code>
+        object where the actual "message flow" is stored while the conversation happens. Of course
+        what this object will hold can be customized but in essense we will pass a list of Messages that 
+        convey the conversational history.
+        Since I don't really like TypedDict to define the State we are going to use <code>pydantic</code>
+        to define the model of the state that each node of the graph will receive as input and produce as output.
+        This <code>State</code> input and output define the <code>schema</code> of the graph and of course can be 
+        customized.
+    </p>
+    <pre><code class = 'language-python'>
+        class MessagesState(BaseModel):
+            messages: Annotated[list[AnyMessage], add_messages]
+        </code></pre>
+    <p>The <code>add_messages</code> we use to annotate the messages atribute is used in langgraph as a combiner 
+        and it can be used to update our messages list with new as you will see later.
+</p>
+
+<h2>[Defining the nodes and conditional nodes]</h2>
+<p>
+Each node will play the role of human or a.i. action turn and the continue_conversation function is used 
+to decide if the user wants to continue talking with the model or end the conversation.
+Writing <code>[end]</code> or <code>[stop]</code> stops the conversation.
+</p>
+
+<pre><code class = 'language-python'>
+    
+    # starting node 
+    def start_node(state: MessagesState) -> MessagesState:
+        sys_prompt = "You are a knowledgeable and helpful AI assistant specialized in SQL"
+    
+        print(sys_prompt)
+        return MessagesState(
+            messages=add_messages(state.messages, SystemMessage(content=sys_prompt))
+        )
+    
+    
+    def end_node(state: MessagesState) -> MessagesState:
+        mes = "[AI] :Ok great talk! See ya!\n"
+        print(mes)
+        return MessagesState(messages=add_messages(state.messages, AIMessage(content=mes)))
+    
+    
+    def continue_conversation(state: MessagesState) -> Literal["ai_turn", "end_node"]:
+        user_input = state.messages[-1].content
+        end_messages = [
+            "[end]",
+            "[stop]",
+        ]
+        if any(x == user_input for x in end_messages):
+            return "end_node"
+        else:
+            return "ai_turn"
+    
+    
+    def human_turn(state: MessagesState) -> MessagesState:
+        user_input = state.messages[-1].content
+        human_input = input("[St] : ")
+        return MessagesState(
+            messages=add_messages(state.messages, HumanMessage(content=human_input))
+        )
+    
+    
+    # Define the function that calls the model
+    def ai_turn(state: MessagesState) -> MessagesState:
+        response = llama_chat_model.invoke(state.messages)
+        print(f"[AI]: {response}")
+        return MessagesState(
+            messages=add_messages(state.messages, AIMessage(content=response))
+        )
+</code></pre>
+<p>The <code>ai_turn</code> is interesting since it is the one node that actually calls the llm model
+taking into account the conversational history up to this point to generate a continuation of the conversation.
+The <code>HumanMessage</code>, <code>AIMessage</code>, <code>SystemMessage</code> are classes predefined in langgraph 
+that denote the different roles that each message derives from.
+</p>
+
+<h2>[Constructing the Graph]</h2>
+<p>
+What is left is to construct the graph and it is simple since we use functions defined in langgraph API 
+to add nodes, condition nodes and edges between nodes.
+The logic is actually strictly following the logic described above in the image of the graph .
+The human is the only one that can end the conversation.
+Finally we need to compile the graph so it is built and we can invoke it.
+</p>
+<pre><code class = 'language-python'>
+# Define a new graph
+workflow = StateGraph(state_schema=MessagesState)
+
+# Define the (single) node in the graph
+workflow.add_node("start_node", start_node)
+workflow.add_node("human_turn", human_turn)
+workflow.add_node("ai_turn", ai_turn)
+workflow.add_node("end_node", end_node)
+
+# add the edges
+workflow.add_edge(START, "start_node")
+workflow.add_edge("start_node", "human_turn")
+workflow.add_conditional_edges("human_turn", continue_conversation)
+workflow.add_edge("ai_turn", "human_turn")
+workflow.add_edge("end_node", END)
+
+g = workflow.compile()
+</code></pre>
+
+
+<h2>[Starting the conversation]</h2>
+<p>
+To actually test our conversational chatbot we can 
+just invoke it with an initial message like the one below 
+since this graph expects as input as you remember a model of our Class 
+<code>MessagesState</code> since we created it this way.
+This will trigger the start node and the conversational flow begins.
+</p>
+<pre><code class = 'language-python'>
+<code>
+    messages = g.invoke(
+        MessagesState(messages=[HumanMessage(content="What is SELECT Statement in SQL ?")])
+    )   
+</code></pre>
+
+</div>
+</body>
+</html>
